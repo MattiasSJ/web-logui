@@ -37,7 +37,7 @@ try {
                     ]
                   ]
                 ],
-                'action' => 'BOUNCE'
+                'actiontype' => 'BOUNCE'
               ]
             ]);
             break;
@@ -55,7 +55,7 @@ try {
                     ]
                   ]
                 ],
-                'action' => 'DELETE'
+                'actiontype' => 'DELETE'
               ]
             ]);
             break;
