@@ -2,11 +2,11 @@ Installation instructions for the web-logui application for the Halon MTA. Pleas
 
 Requirements
 ---
-* Halon MTA 5.3 or later
+* Halon MTA 5.9 or later
 * PHP compatible web server (Apache, NGINX, IIS)
 * PHP (>=7.1)
 * [Composer](https://getcomposer.org)
-* [Elasticsearch (>=6.x)](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html)
+* [Elasticsearch (>=8.x)](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html)
 
 Installation
 ---
