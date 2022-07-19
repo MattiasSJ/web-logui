@@ -15,7 +15,7 @@ foreach ($recipients as $recipient) {
 	if ($quarantine) {
 	    $id = $mail->queue($sender, $recipient["address"], $recipient["transportid"], [
             "metadata" => [
-                "_quarantineid" => "mailquarantine:1",
+                "_quarantineid" => "1",
                 ...$metadata
             ],
             "hold" => true

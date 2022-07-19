@@ -66,10 +66,10 @@ scripting:
         \ to determine if the recipient should be quarantined here\n\t$quarantine\
         \ = true;\n\tif ($quarantine) {\n\t    $id = $mail->queue($sender, $recipient[\"\
         address\"], $recipient[\"transportid\"], [\n            \"metadata\" => [\n\
-        \                \"_quarantineid\" => \"mailquarantine:1\",\n            \
-        \    ...$metadata\n            ],\n            \"hold\" => true\n        ]);\n\
-        \        $actionid = $id[\"queue\"];\n\t\tsendlog(\"QUARANTINE\", \"\", $recipient,\
-        \ $receivedtime, $actionid, $metadata);\n\t} else {\n        $id = $mail->queue($sender,\
+        \                \"_quarantineid\" => \"1\",\n                ...$metadata\n\
+        \            ],\n            \"hold\" => true\n        ]);\n        $actionid\
+        \ = $id[\"queue\"];\n\t\tsendlog(\"QUARANTINE\", \"\", $recipient, $receivedtime,\
+        \ $actionid, $metadata);\n\t} else {\n        $id = $mail->queue($sender,\
         \ $recipient[\"address\"], $recipient[\"transportid\"], [\"metadata\" => $metadata]);\n\
         \        $actionid = $id[\"queue\"];\n        sendlog(\"QUEUE\", \"\", $recipient,\
         \ $receivedtime, $actionid, $metadata);\n\t}\n}\n\nAccept();"
