@@ -10,9 +10,23 @@ $metadata = [];
 $receivedtime = time();
 $metadata["receivedtime"] = "$receivedtime";
 foreach ($recipients as $recipient) {
-    $id = $mail->queue($sender, $recipient["address"], $recipient["transportid"], ["metadata" => $metadata]);
-    $actionid = $id["queue"];
-    sendlog("QUEUE", "", $recipient, $receivedtime, $actionid, $metadata);
+	// Add logic to determine if the recipient should be quarantined here
+	$quarantine = true;
+	if ($quarantine) {
+	    $id = $mail->queue($sender, $recipient["address"], $recipient["transportid"], [
+            "metadata" => [
+                "_quarantineid" => "mailquarantine:1",
+                ...$metadata
+            ],
+            "hold" => true
+        ]);
+        $actionid = $id["queue"];
+		sendlog("QUARANTINE", "", $recipient, $receivedtime, $actionid, $metadata);
+	} else {
+        $id = $mail->queue($sender, $recipient["address"], $recipient["transportid"], ["metadata" => $metadata]);
+        $actionid = $id["queue"];
+        sendlog("QUEUE", "", $recipient, $receivedtime, $actionid, $metadata);
+	}
 }
 
 Accept();

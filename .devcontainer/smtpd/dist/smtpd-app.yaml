@@ -1,202 +1,119 @@
-version: "5.8"
-servers:
-  - id: default
-    transport: mx
-    phases:
-      eod:
-        hook: default
-transportgroups:
-  - id: default
-    retry:
-      count: 30
-      intervals:
-        - interval: 60
-        - interval: 900
-        - interval: 3600
-          notify: true
-        - interval: 7200
-        - interval: 10800
-    dsn:
-      transport: mx
-    transports:
-      - id: mx
-        session:
-          tls:
-            mode: dane
 resolver:
   cache:
     size: 10000
 scripting:
+  files:
+  - data: "include \"elastic/settings.hsl\";\n\n$httpoptions = [\n\t\"timeout\" =>\
+      \ 10,\n\t\"tls_default_ca\" => true,\n\t\"headers\" => [\"Content-Type: application/json\"\
+      ]\n];\n\n$logdata = [\n\t\"direction\" => \"inbound\"\n];\n\n/**\n\t* @param\
+      \ $action \"QUEUE\", \"DEFER\", \"REJECT\", \"DELETE\", \"QUARANTINE\"\n\t*\
+      \ @param $reason string\n\t* @param $recipient array https://docs.halon.io/hsl/eodonce.html#v-t-r6\n\
+      \t* @param $receivedtime number\n\t* @param $actionid number\n\t* @param $metadata\
+      \ array\n\t*/\nfunction sendlog($action, $reason, $recipient, $receivedtime,\
+      \ $actionid = 1, $metadata = []) {\n\tglobal $elasticurl, $httpoptions, $indexname,\
+      \ $indexrotate, $indextype; // settings\n\tglobal $transaction, $connection,\
+      \ $arguments; // eod\n\tglobal $logdata;\n\n\t$logdata += [\n\t\t\"action\"\
+      \ => $action,\n\t\t\"reason\" => $reason,\n\t\t\"serial\" => \"12345678\",\n\
+      \t\t\"owner\" => $logdata[\"direction\"] == \"outbound\" ? $transaction[\"sender\"\
+      ] : $recipient[\"recipient\"],\n\t\t\"ownerdomain\" => $logdata[\"direction\"\
+      ] == \"outbound\" ? $transaction[\"senderaddress\"][\"domain\"] : $recipient[\"\
+      address\"][\"domain\"],\n\t\t\"hostname\" => gethostname(),\n\t\t\"messageid\"\
+      \ => $transaction[\"id\"],\n\t\t\"senderip\" => $connection[\"remoteip\"],\n\
+      \t\t\"senderport\" => $connection[\"remoteport\"],\n\t\t\"serverip\" => $connection[\"\
+      localip\"],\n\t\t\"serverport\" => $connection[\"localport\"],\n\t\t\"serverid\"\
+      \ => $connection[\"serverid\"],\n\t\t\"senderhelo\" => $connection[\"helo\"\
+      ][\"host\"] ?? \"\",\n\t\t\"tlsstarted\" => isset($connection[\"tls\"]),\n\t\
+      \t\"saslusername\" => $connection[\"auth\"][\"username\"] ?? \"\",\n\t\t\"saslauthed\"\
+      \ => isset($connection[\"auth\"]),\n\t\t\"sender\" => $transaction[\"sender\"\
+      ],\n\t\t\"senderlocalpart\" => $transaction[\"senderaddress\"][\"localpart\"\
+      ],\n\t\t\"senderdomain\" => $transaction[\"senderaddress\"][\"domain\"],\n\t\
+      \t\"senderparams\" => $transaction[\"senderparams\"],\n\t\t\"recipient\" =>\
+      \ $recipient[\"recipient\"],\n\t\t\"recipientlocalpart\" => $recipient[\"address\"\
+      ][\"localpart\"],\n\t\t\"recipientdomain\" => $recipient[\"address\"][\"domain\"\
+      ],\n\t\t\"transportid\" => $recipient[\"transportid\"],\n\t\t\"actionid\" =>\
+      \ $actionid,\n\t\t\"subject\" => $arguments[\"mail\"]->getHeader(\"subject\"\
+      ),\n\t\t\"size\" => $arguments[\"mail\"]->getSize(),\n\t\t\"receivedtime\" =>\
+      \ round($receivedtime * 1000),\n\t\t\"metadata\" => $metadata\n\t];\n\n\t$path\
+      \ = \"/\".$indexname.\"-\".strftime($indexrotate, $receivedtime).\"/\".$indextype.\"\
+      /\".$transaction[\"id\"].\":\".$actionid;\n\thttp($elasticurl.$path, $httpoptions,\
+      \ [], json_encode($logdata));\n}\n\nfunction ScanRPD(...$args) {\n\tglobal $logdata;\n\
+      \t$outbound = $args[0][\"outbound\"] ?? false;\n\t$logdata[\"score_rpd\"] =\
+      \ builtin ScanRPD([ \"outbound\" => $outbound ]);\n\t$logdata[\"score_rpd_refid\"\
+      ] = builtin ScanRPD([ \"outbound\" => $outbound, \"refid\" => true ]);\n\t$logdata[\"\
+      score_rpdav\"] = builtin ScanRPD([ \"outbound\" => $outbound, \"extended_result\"\
+      \ => true ])[\"virus_score\"];\n\treturn builtin ScanRPD(...$args);\n}\nfunction\
+      \ ScanSA(...$args) {\n\tglobal $logdata;\n\t$logdata[\"scores\"][\"sa\"] = builtin\
+      \ ScanSA();\n\t$logdata[\"scores\"][\"sa_rules\"] = builtin ScanSA([\"rules\"\
+      \ => true]);\n\treturn builtin ScanSA(...$args);\n}\nfunction ScanKAV(...$args)\
+      \ {\n\tglobal $logdata;\n\t$logdata[\"scores\"][\"kav\"] = builtin ScanKAV()\
+      \ ? : \"\";\n\treturn builtin ScanKAV(...$args);\n}\nfunction ScanCLAM(...$args)\
+      \ {\n\tglobal $logdata;\n\t$logdata[\"scores\"][\"clam\"] = builtin ScanCLAM()\
+      \ ? : \"\";\n\treturn builtin ScanCLAM(...$args);\n}\n"
+    id: elastic/eod.hsl
+  - data: |-
+      $elasticurl = "http://elasticsearch:9200";
+      $indexname = "halon";
+      $indexrotate = "%Y-%m-%d";
+      $indextype = "_doc";
+    id: elastic/settings.hsl
   hooks:
     eod:
-      - id: default
-        data: >-
-          include "elastic/eod.hsl";
-
-
-          $transactionid = $transaction["id"];
-
-          $sender = $transaction["senderaddress"];
-
-          $recipients = $transaction["recipients"];
-
-          $mail = $arguments["mail"];
-
-          $metadata = [];
-
-
-          // Queue message for all recipients
-
-          $receivedtime = time();
-
-          $metadata["receivedtime"] = "$receivedtime";
-
-          foreach ($recipients as $recipient) {
-              $id = $mail->queue($sender, $recipient["address"], $recipient["transportid"], ["metadata" => $metadata]);
-              $actionid = $id["queue"];
-              sendlog("QUEUE", "", $recipient, $receivedtime, $actionid, $metadata);
-          }
-
-
-          Accept();
+    - data: "include \"elastic/eod.hsl\";\n\n$transactionid = $transaction[\"id\"\
+        ];\n$sender = $transaction[\"senderaddress\"];\n$recipients = $transaction[\"\
+        recipients\"];\n$mail = $arguments[\"mail\"];\n$metadata = [];\n\n// Queue\
+        \ message for all recipients\n$receivedtime = time();\n$metadata[\"receivedtime\"\
+        ] = \"$receivedtime\";\nforeach ($recipients as $recipient) {\n\t// Add logic\
+        \ to determine if the recipient should be quarantined here\n\t$quarantine\
+        \ = true;\n\tif ($quarantine) {\n\t    $id = $mail->queue($sender, $recipient[\"\
+        address\"], $recipient[\"transportid\"], [\n            \"metadata\" => [\n\
+        \                \"_quarantineid\" => \"mailquarantine:1\",\n            \
+        \    ...$metadata\n            ],\n            \"hold\" => true\n        ]);\n\
+        \        $actionid = $id[\"queue\"];\n\t\tsendlog(\"QUARANTINE\", \"\", $recipient,\
+        \ $receivedtime, $actionid, $metadata);\n\t} else {\n        $id = $mail->queue($sender,\
+        \ $recipient[\"address\"], $recipient[\"transportid\"], [\"metadata\" => $metadata]);\n\
+        \        $actionid = $id[\"queue\"];\n        sendlog(\"QUEUE\", \"\", $recipient,\
+        \ $receivedtime, $actionid, $metadata);\n\t}\n}\n\nAccept();"
+      id: default
+    postdelivery: "include \"elastic/settings.hsl\";\n\n$httpoptions = [\n\t\"timeout\"\
+      \ => 10,\n\t\"tls_default_ca\" => true,\n\t\"headers\" => [\"Content-Type: application/json\"\
+      ]\n];\n\nfunction sendlog() {\n\tglobal $elasticurl, $httpoptions, $indexname,\
+      \ $indexrotate, $indextype; // settings\n\tglobal $message, $arguments;\n\n\t\
+      $receivedtime = GetMetaData()[\"receivedtime\"];\n\t$time = time();\n\t$logdata[\"\
+      doc\"] = [\n\t\t\"queue\" => [\n\t\t\t\"action\" => $arguments[\"action\"] ??\
+      \ \"DELIVER\",\n\t\t\t\"retry\" => $arguments[\"retry\"],\n\t\t\t\"errormsg\"\
+      \ => $arguments[\"attempt\"][\"result\"][\"reason\"][0] ?? \"\",\n\t\t\t\"errorcode\"\
+      \ => $arguments[\"attempt\"][\"result\"][\"code\"],\n\t\t\t\"transfertime\"\
+      \ => $arguments[\"attempt\"][\"duration\"]\n\t\t],\n\t\t\"sender\" => $message[\"\
+      sender\"],\n\t\t\"senderdomain\" => $message[\"senderaddress\"][\"domain\"],\n\
+      \t\t\"recipient\" => $message[\"recipient\"],\n\t\t\"recipientdomain\" => $message[\"\
+      recipientaddress\"][\"domain\"],\n\t\t\"transportid\" => $message[\"transportid\"\
+      ],\n\t\t\"finishedtime\" => round($time * 1000)\n\t];\n\n\t$path = \"/\".$indexname.\"\
+      -\".strftime($indexrotate, $receivedtime).\"/\".$indextype.\"/\".$message[\"\
+      id\"][\"transaction\"].\":\".$message[\"id\"][\"queue\"].\"/_update\";\n\thttp($elasticurl.$path,\
+      \ $httpoptions, [], json_encode($logdata));\n}\n\nsendlog();"
     predelivery: ""
-    postdelivery: >-
-      include "elastic/settings.hsl";
-
-
-      $httpoptions = [
-      	"timeout" => 10,
-      	"tls_default_ca" => true,
-      	"headers" => ["Content-Type: application/json"]
-      ];
-
-
-      function sendlog() {
-      	global $elasticurl, $httpoptions, $indexname, $indexrotate, $indextype; // settings
-      	global $message, $arguments;
-
-      	$receivedtime = GetMetaData()["receivedtime"];
-      	$time = time();
-      	$logdata["doc"] = [
-      		"queue" => [
-      			"action" => $arguments["action"] ?? "DELIVER",
-      			"retry" => $arguments["retry"],
-      			"errormsg" => $arguments["attempt"]["result"]["reason"][0] ?? "",
-      			"errorcode" => $arguments["attempt"]["result"]["code"],
-      			"transfertime" => $arguments["attempt"]["duration"]
-      		],
-      		"sender" => $message["sender"],
-      		"senderdomain" => $message["senderaddress"]["domain"],
-      		"recipient" => $message["recipient"],
-      		"recipientdomain" => $message["recipientaddress"]["domain"],
-      		"transportid" => $message["transportid"],
-      		"finishedtime" => round($time * 1000)
-      	];
-
-      	$path = "/".$indexname."-".strftime($indexrotate, $receivedtime)."/".$indextype."/".$message["id"]["transaction"].":".$message["id"]["queue"]."/_update";
-      	http($elasticurl.$path, $httpoptions, [], json_encode($logdata));
-      }
-
-
-      sendlog();
-  files:
-    - id: elastic/eod.hsl
-      data: >
-        include "elastic/settings.hsl";
-
-
-        $httpoptions = [
-        	"timeout" => 10,
-        	"tls_default_ca" => true,
-        	"headers" => ["Content-Type: application/json"]
-        ];
-
-
-        $logdata = [
-        	"direction" => "inbound"
-        ];
-
-
-        /**
-        	* @param $action "QUEUE", "DEFER", "REJECT", "DELETE", "QUARANTINE"
-        	* @param $reason string
-        	* @param $recipient array https://docs.halon.io/hsl/eodonce.html#v-t-r6
-        	* @param $receivedtime number
-        	* @param $actionid number
-        	* @param $metadata array
-        	*/
-        function sendlog($action, $reason, $recipient, $receivedtime, $actionid = 1, $metadata = []) {
-        	global $elasticurl, $httpoptions, $indexname, $indexrotate, $indextype; // settings
-        	global $transaction, $connection, $arguments; // eod
-        	global $logdata;
-
-        	$logdata += [
-        		"action" => $action,
-        		"reason" => $reason,
-        		"serial" => "12345678",
-        		"owner" => $logdata["direction"] == "outbound" ? $transaction["sender"] : $recipient["recipient"],
-        		"ownerdomain" => $logdata["direction"] == "outbound" ? $transaction["senderaddress"]["domain"] : $recipient["address"]["domain"],
-        		"hostname" => gethostname(),
-        		"messageid" => $transaction["id"],
-        		"senderip" => $connection["remoteip"],
-        		"senderport" => $connection["remoteport"],
-        		"serverip" => $connection["localip"],
-        		"serverport" => $connection["localport"],
-        		"serverid" => $connection["serverid"],
-        		"senderhelo" => $connection["helo"]["host"] ?? "",
-        		"tlsstarted" => isset($connection["tls"]),
-        		"saslusername" => $connection["auth"]["username"] ?? "",
-        		"saslauthed" => isset($connection["auth"]),
-        		"sender" => $transaction["sender"],
-        		"senderlocalpart" => $transaction["senderaddress"]["localpart"],
-        		"senderdomain" => $transaction["senderaddress"]["domain"],
-        		"senderparams" => $transaction["senderparams"],
-        		"recipient" => $recipient["recipient"],
-        		"recipientlocalpart" => $recipient["address"]["localpart"],
-        		"recipientdomain" => $recipient["address"]["domain"],
-        		"transportid" => $recipient["transportid"],
-        		"actionid" => $actionid,
-        		"subject" => $arguments["mail"]->getHeader("subject"),
-        		"size" => $arguments["mail"]->getSize(),
-        		"receivedtime" => round($receivedtime * 1000),
-        		"metadata" => $metadata
-        	];
-
-        	$path = "/".$indexname."-".strftime($indexrotate, $receivedtime)."/".$indextype."/".$transaction["id"].":".$actionid;
-        	http($elasticurl.$path, $httpoptions, [], json_encode($logdata));
-        }
-
-
-        function ScanRPD(...$args) {
-        	global $logdata;
-        	$outbound = $args[0]["outbound"] ?? false;
-        	$logdata["score_rpd"] = builtin ScanRPD([ "outbound" => $outbound ]);
-        	$logdata["score_rpd_refid"] = builtin ScanRPD([ "outbound" => $outbound, "refid" => true ]);
-        	$logdata["score_rpdav"] = builtin ScanRPD([ "outbound" => $outbound, "extended_result" => true ])["virus_score"];
-        	return builtin ScanRPD(...$args);
-        }
-
-        function ScanSA(...$args) {
-        	global $logdata;
-        	$logdata["scores"]["sa"] = builtin ScanSA();
-        	$logdata["scores"]["sa_rules"] = builtin ScanSA(["rules" => true]);
-        	return builtin ScanSA(...$args);
-        }
-
-        function ScanKAV(...$args) {
-        	global $logdata;
-        	$logdata["scores"]["kav"] = builtin ScanKAV() ? : "";
-        	return builtin ScanKAV(...$args);
-        }
-
-        function ScanCLAM(...$args) {
-        	global $logdata;
-        	$logdata["scores"]["clam"] = builtin ScanCLAM() ? : "";
-        	return builtin ScanCLAM(...$args);
-        }
-    - id: elastic/settings.hsl
-      data: |-
-        $elasticurl = "http://elasticsearch:9200";
-        $indexname = "halon";
-        $indexrotate = "%Y-%m-%d";
-        $indextype = "_doc";
+servers:
+- id: default
+  phases:
+    eod:
+      hook: default
+  transport: mx
+transportgroups:
+- dsn:
+    transport: mx
+  id: default
+  retry:
+    count: 30
+    intervals:
+    - interval: 60
+    - interval: 900
+    - interval: 3600
+      notify: true
+    - interval: 7200
+    - interval: 10800
+  transports:
+  - id: mx
+    session:
+      tls:
+        mode: dane
+version: '5.9'

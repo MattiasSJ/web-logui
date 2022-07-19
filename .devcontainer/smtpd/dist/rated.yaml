@@ -1,12 +1,12 @@
-version: "5.8"
 environment:
   controlsocket:
+    chmod: '0660'
     group: staff
-    chmod: "0660"
-  socket:
-    owner: halon
-    group: halon
-    chmod: "0660"
   privdrop:
-    user: nobody
     group: nogroup
+    user: nobody
+  socket:
+    chmod: '0660'
+    group: halon
+    owner: halon
+version: '5.9'
