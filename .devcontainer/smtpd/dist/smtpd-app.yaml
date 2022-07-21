@@ -6,12 +6,12 @@ scripting:
   - data: "include \"elastic/settings.hsl\";\n\n$httpoptions = [\n\t\"timeout\" =>\
       \ 10,\n\t\"tls_default_ca\" => true,\n\t\"headers\" => [\"Content-Type: application/json\"\
       ]\n];\n\n$logdata = [\n\t\"direction\" => \"inbound\"\n];\n\nfunction sendlog($action,\
-      \ $reason, $recipient, $receivedtime, $actionid = 1, $metadata = []) {\n\tglobal\
-      \ $elasticurl, $httpoptions, $indexname, $indexrotate; // settings\n\tglobal\
-      \ $transaction, $connection, $arguments; // eod\n\tglobal $logdata;\n\n\t$logdata\
-      \ += [\n\t\t\"action\" => $action,\n\t\t\"reason\" => $reason,\n\t\t\"serial\"\
-      \ => \"12345678\",\n\t\t\"owner\" => $logdata[\"direction\"] == \"outbound\"\
-      \ ? $transaction[\"sender\"] : $recipient[\"recipient\"],\n\t\t\"ownerdomain\"\
+      \ $reason, $recipient, $receivedtime, $actionid = none, $metadata = []) {\n\t\
+      global $elasticurl, $httpoptions, $indexname, $indexrotate; // settings\n\t\
+      global $transaction, $connection, $arguments; // eod\n\tglobal $logdata;\n\n\
+      \t$logdata += [\n\t\t\"action\" => $action,\n\t\t\"reason\" => $reason,\n\t\t\
+      \"serial\" => \"12345678\",\n\t\t\"owner\" => $logdata[\"direction\"] == \"\
+      outbound\" ? $transaction[\"sender\"] : $recipient[\"recipient\"],\n\t\t\"ownerdomain\"\
       \ => $logdata[\"direction\"] == \"outbound\" ? $transaction[\"senderaddress\"\
       ][\"domain\"] : $recipient[\"address\"][\"domain\"],\n\t\t\"hostname\" => gethostname(),\n\
       \t\t\"messageid\" => $transaction[\"id\"],\n\t\t\"senderip\" => $connection[\"\
@@ -26,36 +26,37 @@ scripting:
       \t\"senderparams\" => $transaction[\"senderparams\"],\n\t\t\"recipient\" =>\
       \ $recipient[\"recipient\"],\n\t\t\"recipientlocalpart\" => $recipient[\"address\"\
       ][\"localpart\"],\n\t\t\"recipientdomain\" => $recipient[\"address\"][\"domain\"\
-      ],\n\t\t\"transportid\" => $recipient[\"transportid\"],\n\t\t\"actionid\" =>\
-      \ $actionid,\n\t\t\"subject\" => $arguments[\"mail\"]->getHeader(\"subject\"\
-      ),\n\t\t\"size\" => $arguments[\"mail\"]->getSize(),\n\t\t\"receivedtime\" =>\
-      \ round($receivedtime * 1000),\n\t\t\"metadata\" => $metadata\n\t];\n\n\t$path\
-      \ = \"/\".$indexname.\"-\".strftime($indexrotate, $receivedtime).\"/_doc/\"\
-      .$transaction[\"id\"].\":\".$actionid;\n\thttp($elasticurl.$path, $httpoptions,\
-      \ [], json_encode($logdata));\n  \n\t// http_bulk(\"elastic\", json_encode(\n\
-      \t// \t[\n\t// \t\t\"index\" => [\n\t// \t\t\t\"_index\" => $indexname.\"-\"\
-      .strftime($indexrotate, $receivedtime),\n\t// \t\t\t\"_id\" => $transaction[\"\
-      id\"].\":\".$actionid\n\t// \t\t]\n\t// \t]).\"\\n\".json_encode($logdata));\n\
-      }\n\nfunction ScanRPD(...$args) {\n\tglobal $logdata;\n\t$outbound = $args[0][\"\
-      outbound\"] ?? false;\n\t$logdata[\"score_rpd\"] = builtin ScanRPD([ \"outbound\"\
-      \ => $outbound ]);\n\t$logdata[\"score_rpd_refid\"] = builtin ScanRPD([ \"outbound\"\
-      \ => $outbound, \"refid\" => true ]);\n\t$logdata[\"score_rpdav\"] = builtin\
-      \ ScanRPD([ \"outbound\" => $outbound, \"extended_result\" => true ])[\"virus_score\"\
-      ];\n\treturn builtin ScanRPD(...$args);\n}\nfunction ScanSA(...$args) {\n\t\
-      global $logdata;\n\t$logdata[\"scores\"][\"sa\"] = builtin ScanSA();\n\t$logdata[\"\
+      ],\n\t\t\"transportid\" => $recipient[\"transportid\"],\n\t\t\"subject\" =>\
+      \ $arguments[\"mail\"]->getHeader(\"subject\"),\n\t\t\"size\" => $arguments[\"\
+      mail\"]->getSize(),\n\t\t\"receivedtime\" => round($receivedtime * 1000),\n\t\
+      \t\"metadata\" => $metadata\n\t];\n\tif ($actionid) $logdata[\"actionid\"] =\
+      \ $actionid;\n\n\t$path = \"/\".$indexname.\"-\".strftime($indexrotate, $receivedtime).\"\
+      /_doc\";\n\tif ($actionid) $path += \"/\".$transaction[\"id\"].\":\".$actionid;\n\
+      \thttp($elasticurl.$path, $httpoptions, [], json_encode($logdata));\n  \n \t\
+      // $index = [\n\t// \t\"index\" => [\n\t// \t\t\"_index\" => $indexname.\"-\"\
+      .strftime($indexrotate, $receivedtime)\n\t// \t]\n\t// ];\n\t// if ($actionid)\
+      \ $index[\"index\"][\"_id\"] = $transaction[\"id\"].\":\".$actionid;\n\t// http_bulk(\"\
+      elastic\", json_encode($index).\"\\n\".json_encode($logdata));\n}\n\nfunction\
+      \ ScanRPD(...$args) {\n\tglobal $logdata;\n\t$outbound = $args[0][\"outbound\"\
+      ] ?? false;\n\t$logdata[\"score_rpd\"] = builtin ScanRPD([ \"outbound\" => $outbound\
+      \ ]);\n\t$logdata[\"score_rpd_refid\"] = builtin ScanRPD([ \"outbound\" => $outbound,\
+      \ \"refid\" => true ]);\n\t$logdata[\"score_rpdav\"] = builtin ScanRPD([ \"\
+      outbound\" => $outbound, \"extended_result\" => true ])[\"virus_score\"];\n\t\
+      return builtin ScanRPD(...$args);\n}\nfunction ScanSA(...$args) {\n\tglobal\
+      \ $logdata;\n\t$logdata[\"scores\"][\"sa\"] = builtin ScanSA();\n\t$logdata[\"\
       scores\"][\"sa_rules\"] = builtin ScanSA([\"rules\" => true]);\n\treturn builtin\
       \ ScanSA(...$args);\n}\nfunction ScanKAV(...$args) {\n\tglobal $logdata;\n\t\
       $logdata[\"scores\"][\"kav\"] = builtin ScanKAV() ? : \"\";\n\treturn builtin\
       \ ScanKAV(...$args);\n}\nfunction ScanCLAM(...$args) {\n\tglobal $logdata;\n\
       \t$logdata[\"scores\"][\"clam\"] = builtin ScanCLAM() ? : \"\";\n\treturn builtin\
       \ ScanCLAM(...$args);\n}\nfunction Defer(...$args) {\n    global $transaction,\
-      \ $metadata;\n    $i = 1;\n    foreach ($transaction[\"recipients\"] as $recipient)\
-      \ {\n        sendlog(\"DEFER\", isset($args[0]) ? $args[0] : \"\", $recipient,\
-      \ time(), $i, $metadata);\n        $i++;\n    }\n    builtin Defer(...$args);\n\
-      }\nfunction Reject(...$args) {\n    global $transaction, $metadata;\n    $i\
-      \ = 1;\n    foreach ($transaction[\"recipients\"] as $recipient) {\n       \
-      \ sendlog(\"REJECT\", isset($args[0]) ? $args[0] : \"\", $recipient, time(),\
-      \ $i, $metadata);\n        $i++;\n    }\n    builtin Reject(...$args);\n}"
+      \ $metadata;\n    foreach ($transaction[\"recipients\"] as $recipient) {\n \
+      \       sendlog(\"DEFER\", isset($args[0]) ? $args[0] : \"\", $recipient, time(),\
+      \ none, $metadata);\n    }\n    builtin Defer(...$args);\n}\nfunction Reject(...$args)\
+      \ {\n    global $transaction, $metadata;\n    foreach ($transaction[\"recipients\"\
+      ] as $recipient) {\n        sendlog(\"REJECT\", isset($args[0]) ? $args[0] :\
+      \ \"\", $recipient, time(), none, $metadata);\n    }\n    builtin Reject(...$args);\n\
+      }"
     id: elastic/eod.hsl
   - data: |-
       $elasticurl = "http://elasticsearch:9200";
