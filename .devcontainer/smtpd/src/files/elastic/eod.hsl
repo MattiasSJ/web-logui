@@ -10,16 +10,8 @@ $logdata = [
 	"direction" => "inbound"
 ];
 
-/**
-	* @param $action "QUEUE", "DEFER", "REJECT", "DELETE", "QUARANTINE"
-	* @param $reason string
-	* @param $recipient array https://docs.halon.io/hsl/eodonce.html#v-t-r6
-	* @param $receivedtime number
-	* @param $actionid number
-	* @param $metadata array
-	*/
 function sendlog($action, $reason, $recipient, $receivedtime, $actionid = 1, $metadata = []) {
-	global $elasticurl, $httpoptions, $indexname, $indexrotate, $indextype; // settings
+	global $elasticurl, $httpoptions, $indexname, $indexrotate; // settings
 	global $transaction, $connection, $arguments; // eod
 	global $logdata;
 
@@ -55,8 +47,16 @@ function sendlog($action, $reason, $recipient, $receivedtime, $actionid = 1, $me
 		"metadata" => $metadata
 	];
 
-	$path = "/".$indexname."-".strftime($indexrotate, $receivedtime)."/".$indextype."/".$transaction["id"].":".$actionid;
+	$path = "/".$indexname."-".strftime($indexrotate, $receivedtime)."/_doc/".$transaction["id"].":".$actionid;
 	http($elasticurl.$path, $httpoptions, [], json_encode($logdata));
+  
+	// http_bulk("elastic", json_encode(
+	// 	[
+	// 		"index" => [
+	// 			"_index" => $indexname."-".strftime($indexrotate, $receivedtime),
+	// 			"_id" => $transaction["id"].":".$actionid
+	// 		]
+	// 	])."\n".json_encode($logdata));
 }
 
 function ScanRPD(...$args) {
@@ -82,4 +82,22 @@ function ScanCLAM(...$args) {
 	global $logdata;
 	$logdata["scores"]["clam"] = builtin ScanCLAM() ? : "";
 	return builtin ScanCLAM(...$args);
+}
+function Defer(...$args) {
+    global $transaction, $metadata;
+    $i = 1;
+    foreach ($transaction["recipients"] as $recipient) {
+        sendlog("DEFER", isset($args[0]) ? $args[0] : "", $recipient, time(), $i, $metadata);
+        $i++;
+    }
+    builtin Defer(...$args);
+}
+function Reject(...$args) {
+    global $transaction, $metadata;
+    $i = 1;
+    foreach ($transaction["recipients"] as $recipient) {
+        sendlog("REJECT", isset($args[0]) ? $args[0] : "", $recipient, time(), $i, $metadata);
+        $i++;
+    }
+    builtin Reject(...$args);
 }
