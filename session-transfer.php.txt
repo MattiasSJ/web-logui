@@ -1,58 +1,5 @@
 <?php
 
-/* On login requests (this should be determined on the remote host) eg. user visits a URL locally
-   on the control panel /login-enduser
-
-   1. Make a request in the background to session-transfer.php?api-key=<key>&username=<account>
-    If account is a valid email, no 'access' array needs to be POST'ed in this request
-    otherwide POST an access array
-     eg. array('mail' => array('user@example.com', 'alias@example.com'))
-     eg. array('domain' => array('example.com'))
-
-   2. The 'session' id returned by this file should be used to redirect the user
-    Location: session-transfer.php?session=<SESSION>
-
-   Simple example usage (be aware that a session is always created on the end-user regardless if the link
-    is visited or not.
-
-  <?php
-  function halon_generateLink($username, $domains)
-  {
-    // change these settings
-    $enduser = 'http://10.2.0.166/enduser/';
-    $apikey = 'secret'; // settings.php
-
-    $get = http_build_query(
-        array(
-          'username' => $username,
-          'api-key' => $apikey
-        )
-      );
-    $access = http_build_query(
-        array(
-          'access' => array('domain' => $domains)
-        )
-      );
-    $opts = array('http' =>
-      array(
-        'method'  => 'POST',
-        'header'  => 'Content-type: application/x-www-form-urlencoded',
-        'content' => $access
-      )
-    );
-    $context = stream_context_create($opts);
-    $result = json_decode(@file_get_contents($enduser.'session-transfer.php?'.$get, false, $context));
-    if (!$result || !isset($result->session))
-      return null;
-    return $enduser.'session-transfer.php?session='.$result->session;
-  }
-
-  $link = halon_generateLink('User Name', array('example.se', 'example.com'));
-  echo '<a href="'.$link.'">End-user</a>';
-  ?>
-
-*/
-
 define('BASE', dirname(__FILE__));
 
 require_once BASE.'/inc/core.php';
