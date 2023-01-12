@@ -153,6 +153,7 @@ foreach ($results as $m) {
   if ($m['type'] == 'queue' && $m['doc']->msgaction == 'DELIVER') $m['doc']->msgaction = 'QUEUE';
 
   $mail = array();
+  $mail['template'] = new StdClass();
 
   if ($dbh && in_array($m['doc']->queue['action'] ?? $m['doc']->msgaction, ['QUEUE', 'QUARANTINE'])) {
     $mail['template']->inqueue = true;
